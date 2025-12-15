@@ -1,0 +1,348 @@
+Вот полный пример XML-документации для всех методов контроллера и Minimal API:
+
+---
+
+✅ 5.4.1-5.4.2 XML-документация для контроллера TodoController
+
+Полный код контроллера с XML-комментариями:
+
+```csharp
+using Microsoft.AspNetCore.Mvc;
+using TodoApi.Models;
+using System.Collections.Generic;
+using System.Linq;
+
+namespace TodoApi.Controllers
+{
+    /// <summary>
+    /// Контроллер для управления задачами (ToDo)
+    /// </summary>
+    [ApiController]
+    [Route("api/[controller]")]
+    public class TodoController : ControllerBase
+    {
+        private static List<TodoItem> _todos = new();
+        private static int _nextId = 1;
+
+        /// <summary>
+        /// Получить все задачи
+        /// </summary>
+        /// <returns>Список всех задач</returns>
+        /// <response code="200">Успешно возвращен список задач</response>
+        [HttpGet]
+        [ProducesResponseType(typeof(List<TodoItem>), StatusCodes.Status200OK)]
+        public IActionResult GetAll()
+        {
+            return Ok(_todos);
+        }
+
+        /// <summary>
+        /// Получить задачу по ID
+        /// </summary>
+        /// <param name="id">Идентификатор задачи</param>
+        /// <returns>Задача с указанным ID</returns>
+        /// <remarks>
+        /// Пример запроса:
+        /// 
+        /// GET /api/todo/1
+        /// </remarks>
+        /// <response code="200">Задача найдена</response>
+        /// <response code="404">Задача с указанным ID не найдена</response>
+        [HttpGet("{id}")]
+        [ProducesResponseType(typeof(TodoItem), StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status404NotFound)]
+        public IActionResult GetById(int id)
+        {
+            var todo = _todos.FirstOrDefault(t => t.Id == id);
+            if (todo == null)
+                return NotFound($"Задача с ID {id} не найдена");
+            
+            return Ok(todo);
+        }
+
+        /// <summary>
+        /// Создать новую задачу
+        /// </summary>
+        /// <param name="item">Данные новой задачи</param>
+        /// <returns>Созданная задача</returns>
+        /// <remarks>
+        /// Пример запроса:
+        /// 
+        /// POST /api/todo
+        /// {
+        ///     "id": 0, // Игнорируется, генерируется автоматически
+        ///     "name": "Сделать практическую работу",
+        ///     "description": "Выполнить все задания по документированию",
+        ///     "dueDate": "2024-12-31T23:59:59",
+        ///     "status": 0
+        /// }
+        /// </remarks>
+        /// <response code="201">Задача успешно создана</response>
+        /// <response code="400">Некорректные данные</response>
+        [HttpPost]
+        [ProducesResponseType(typeof(TodoItem), StatusCodes.Status201Created)]
+        [ProducesResponseType(StatusCodes.Status400BadRequest)]
+        public IActionResult Create([FromBody] TodoItem item)
+        {
+            if (item == null)
+                return BadRequest("Данные задачи не могут быть пустыми");
+            
+            if (string.IsNullOrWhiteSpace(item.Name))
+                return BadRequest("Название задачи обязательно");
+            
+            item.Id = _nextId++;
+            _todos.Add(item);
+            
+            return CreatedAtAction(nameof(GetById), new { id = item.Id }, item);
+        }
+
+        /// <summary>
+        /// Обновить существующую задачу
+        /// </summary>
+        /// <param name="id">Идентификатор обновляемой задачи</param>
+        /// <param name="item">Новые данные задачи</param>
+        /// <returns>Обновленная задача</returns>
+        /// <remarks>
+        /// Пример запроса:
+        /// 
+        /// PUT /api/todo/1
+        /// {
+        ///     "id": 1,
+        ///     "name": "Обновленное название",
+        ///     "description": "Обновленное описание",
+        ///     "dueDate": "2024-12-25T12:00:00",
+        ///     "status": 1
+        /// }
+        /// </remarks>
+        /// <response code="200">Задача успешно обновлена</response>
+        /// <response code="400">Неверные данные</response>
+        /// <response code="404">Задача не найдена</response>
+        [HttpPut("{id}")]
+        [ProducesResponseType(typeof(TodoItem), StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status400BadRequest)]
+        [ProducesResponseType(StatusCodes.Status404NotFound)]
+        public IActionResult Update(int id, [FromBody] TodoItem item)
+        {
+            if (item == null || item.Id != id)
+                return BadRequest("Неверные данные");
+            
+            var existing = _todos.FirstOrDefault(t => t.Id == id);
+            if (existing == null)
+                return NotFound($"Задача с ID {id} не найдена");
+            
+            existing.Name = item.Name;
+            existing.Description = item.Description;
+            existing.DueDate = item.DueDate;
+            existing.Status = item.Status;
+            
+            return Ok(existing);
+        }
+
+        /// <summary>
+        /// Удалить задачу
+        /// </summary>
+        /// <param name="id">Идентификатор удаляемой задачи</param>
+        /// <returns>Результат операции</returns>
+        /// <remarks>
+        /// Пример запроса:
+        /// 
+        /// DELETE /api/todo/1
+        /// </remarks>
+        /// <response code="204">Задача успешно удалена</response>
+        /// <response code="404">Задача не найдена</response>
+        [HttpDelete("{id}")]
+        [ProducesResponseType(StatusCodes.Status204NoContent)]
+        [ProducesResponseType(StatusCodes.Status404NotFound)]
+        public IActionResult Delete(int id)
+        {
+            var todo = _todos.FirstOrDefault(t => t.Id == id);
+            if (todo == null)
+                return NotFound($"Задача с ID {id} не найдена");
+            
+            _todos.Remove(todo);
+            return NoContent();
+        }
+    }
+}
+```
+
+---
+
+✅ XML-документация для Minimal API Endpoints в Program.cs
+
+Добавьте эти комментарии прямо над Minimal API методами:
+
+```csharp
+/// <summary>
+/// Проверка состояния API
+/// </summary>
+/// <returns>Статус работы сервиса</returns>
+/// <remarks>
+/// Пример запроса:
+/// 
+/// GET /health
+/// </remarks>
+/// <response code="200">Сервис работает</response>
+app.MapGet("/health", () => 
+{
+    return Results.Ok(new 
+    { 
+        status = "Healthy", 
+        timestamp = DateTime.UtcNow,
+        service = "Todo API",
+        version = "1.0"
+    });
+})
+.WithName("HealthCheck")
+.WithTags("Monitoring")
+.Produces(StatusCodes.Status200OK);
+
+/// <summary>
+/// Поиск задач по диапазону дат
+/// </summary>
+/// <param name="startDate">Начальная дата (необязательно)</param>
+/// <param name="endDate">Конечная дата (необязательно)</param>
+/// <returns>Список задач в указанном диапазоне дат</returns>
+/// <remarks>
+/// Примеры запросов:
+/// 
+/// 1. GET /todos/by-date
+/// 2. GET /todos/by-date?startDate=2024-12-01
+/// 3. GET /todos/by-date?startDate=2024-12-01&endDate=2024-12-31
+/// </remarks>
+/// <response code="200">Найдены задачи</response>
+/// <response code="404">Задачи не найдены</response>
+app.MapGet("/todos/by-date", (DateTime? startDate, DateTime? endDate) =>
+{
+    var start = startDate ?? DateTime.MinValue;
+    var end = endDate ?? DateTime.MaxValue;
+    
+    var filtered = todosForMinimalApi
+        .Where(t => t.DueDate >= start && t.DueDate <= end)
+        .ToList();
+    
+    if (!filtered.Any())
+        return Results.NotFound(new { message = "Задачи в указанном диапазоне не найдены" });
+    
+    return Results.Ok(filtered);
+})
+.WithName("GetTodosByDateRange")
+.WithTags("Todos")
+.Produces<List<TodoItem>>(StatusCodes.Status200OK)
+.Produces(StatusCodes.Status404NotFound);
+
+/// <summary>
+/// Получить все задачи через Minimal API
+/// </summary>
+/// <returns>Список всех задач</returns>
+/// <remarks>
+/// Пример запроса:
+/// 
+/// GET /todos/all
+/// </remarks>
+/// <response code="200">Успешно возвращен список задач</response>
+app.MapGet("/todos/all", () =>
+{
+    return Results.Ok(todosForMinimalApi);
+})
+.WithName("GetAllTodosMinimal")
+.WithTags("Todos")
+.Produces<List<TodoItem>>(StatusCodes.Status200OK);
+```
+
+---
+
+✅ XML-документация для модели TodoItem:
+
+```csharp
+namespace TodoApi.Models
+{
+    /// <summary>
+    /// Статус выполнения задачи
+    /// </summary>
+    public enum Status
+    {
+        /// <summary>
+        /// Ожидает выполнения
+        /// </summary>
+        Pending,
+        
+        /// <summary>
+        /// В процессе выполнения
+        /// </summary>
+        InProgress,
+        
+        /// <summary>
+        /// Завершена
+        /// </summary>
+        Completed
+    }
+
+    /// <summary>
+    /// Модель задачи (ToDo)
+    /// </summary>
+    public class TodoItem
+    {
+        /// <summary>
+        /// Уникальный идентификатор задачи
+        /// </summary>
+        public int Id { get; set; }
+        
+        /// <summary>
+        /// Название задачи
+        /// </summary>
+        public string Name { get; set; }
+        
+        /// <summary>
+        /// Подробное описание задачи
+        /// </summary>
+        public string Description { get; set; }
+        
+        /// <summary>
+        /// Срок выполнения задачи
+        /// </summary>
+        public DateTime DueDate { get; set; }
+        
+        /// <summary>
+        /// Текущий статус задачи
+        /// </summary>
+        public Status Status { get; set; }
+    }
+}
+```
+
+---
+
+📍 Где находятся эти методы:
+
+1. TodoController.cs → в папке Controllers/
+   · GetAll() — GET /api/todo
+   · GetById() — GET /api/todo/{id}
+   · Create() — POST /api/todo
+   · Update() — PUT /api/todo/{id}
+   · Delete() — DELETE /api/todo/{id}
+2. Program.cs → в корне проекта
+   · /health — Minimal API endpoint
+   · /todos/by-date — Minimal API endpoint
+   · /todos/all — Minimal API endpoint
+3. TodoItem.cs → в папке Models/
+
+---
+
+🔧 Как добавить XML-комментарии в Visual Studio:
+
+1. Наведите курсор на метод
+2. Напишите /// (три слеша) над методом
+3. Visual Studio автоматически создаст шаблон:
+   ```csharp
+   /// <summary>
+   /// 
+   /// </summary>
+   /// <param name="id"></param>
+   /// <returns></returns>
+   ```
+4. Заполните поля и добавьте <remarks> и <response> вручную
+
+---
+
+После добавления этих комментариев и включения XML-генерации (5.2.2), Swagger будет показывать всю документацию!
