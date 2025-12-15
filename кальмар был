@@ -1,0 +1,426 @@
+Конечно, вот полная документация для всех Minimal API endpoints с использованием .WithOpenApi() и других методов из задания 5.5.1:
+
+```csharp
+// Добавьте в начало Program.cs
+using Microsoft.AspNetCore.OpenApi;
+
+// ... остальной код ...
+
+var app = builder.Build();
+
+// Предварительная инициализация списка задач для Minimal API
+var todosForMinimalApi = new List<TodoItem>
+{
+    new() { Id = 1, Name = "Изучить ASP.NET Core", Description = "Пройти курс", DueDate = DateTime.Now.AddDays(7), Status = Status.InProgress },
+    new() { Id = 2, Name = "Сделать практическую работу", Description = "Выполнить все задания", DueDate = DateTime.Now.AddDays(2), Status = Status.Pending },
+    new() { Id = 3, Name = "Сдать проект", Description = "Защитить проект", DueDate = DateTime.Now.AddDays(14), Status = Status.Pending }
+};
+
+// ========== HEALTH CHECK ENDPOINT ==========
+app.MapGet("/health", () => 
+{
+    return Results.Ok(new 
+    { 
+        status = "Healthy", 
+        timestamp = DateTime.UtcNow,
+        service = "Todo API",
+        version = "1.0"
+    });
+})
+.WithName("HealthCheck")
+.WithTags("Monitoring")
+.Produces(StatusCodes.Status200OK)
+.WithOpenApi(operation =>
+{
+    operation.Summary = "Проверка состояния API";
+    operation.Description = "Возвращает статус работы сервиса и метаданные";
+    operation.Responses["200"] = new Microsoft.OpenApi.Models.OpenApiResponse
+    {
+        Description = "Сервис работает нормально",
+        Content = new Dictionary<string, Microsoft.OpenApi.Models.OpenApiMediaType>
+        {
+            ["application/json"] = new()
+            {
+                Schema = new()
+                {
+                    Type = "object",
+                    Properties = new Dictionary<string, Microsoft.OpenApi.Models.OpenApiSchema>
+                    {
+                        ["status"] = new() { Type = "string", Example = new Microsoft.OpenApi.Any.OpenApiString("Healthy") },
+                        ["timestamp"] = new() { Type = "string", Format = "date-time" },
+                        ["service"] = new() { Type = "string", Example = new Microsoft.OpenApi.Any.OpenApiString("Todo API") },
+                        ["version"] = new() { Type = "string", Example = new Microsoft.OpenApi.Any.OpenApiString("1.0") }
+                    }
+                }
+            }
+        }
+    };
+    return operation;
+});
+
+// ========== ПОИСК ЗАДАЧ ПО ДАТАМ ==========
+app.MapGet("/todos/by-date", (DateTime? startDate, DateTime? endDate) =>
+{
+    var start = startDate ?? DateTime.MinValue;
+    var end = endDate ?? DateTime.MaxValue;
+    
+    var filtered = todosForMinimalApi
+        .Where(t => t.DueDate >= start && t.DueDate <= end)
+        .ToList();
+    
+    if (!filtered.Any())
+        return Results.NotFound(new { message = "Задачи в указанном диапазоне не найдены" });
+    
+    return Results.Ok(filtered);
+})
+.WithName("GetTodosByDateRange")
+.WithTags("Todos")
+.Produces<List<TodoItem>>(StatusCodes.Status200OK)
+.Produces(StatusCodes.Status404NotFound)
+.WithOpenApi(operation =>
+{
+    operation.Summary = "Поиск задач по диапазону дат";
+    operation.Description = "Возвращает задачи, срок выполнения которых находится между указанными датами";
+    
+    operation.Parameters.Clear();
+    operation.Parameters.Add(new()
+    {
+        Name = "startDate",
+        In = Microsoft.OpenApi.Models.ParameterLocation.Query,
+        Description = "Начальная дата (опционально). Формат: YYYY-MM-DD",
+        Required = false,
+        Schema = new() { Type = "string", Format = "date" }
+    });
+    
+    operation.Parameters.Add(new()
+    {
+        Name = "endDate",
+        In = Microsoft.OpenApi.Models.ParameterLocation.Query,
+        Description = "Конечная дата (опционально). Формат: YYYY-MM-DD",
+        Required = false,
+        Schema = new() { Type = "string", Format = "date" }
+    });
+    
+    return operation;
+});
+
+// ========== ПОЛУЧЕНИЕ ВСЕХ ЗАДАЧ ==========
+app.MapGet("/todos/all", () =>
+{
+    return Results.Ok(todosForMinimalApi);
+})
+.WithName("GetAllTodosMinimal")
+.WithTags("Todos")
+.Produces<List<TodoItem>>(StatusCodes.Status200OK)
+.WithOpenApi(operation =>
+{
+    operation.Summary = "Получение всех задач";
+    operation.Description = "Возвращает полный список всех задач в системе";
+    operation.Responses["200"] = new Microsoft.OpenApi.Models.OpenApiResponse
+    {
+        Description = "Успешно возвращен список задач",
+        Content = new Dictionary<string, Microsoft.OpenApi.Models.OpenApiMediaType>
+        {
+            ["application/json"] = new()
+            {
+                Schema = new()
+                {
+                    Type = "array",
+                    Items = new()
+                    {
+                        Reference = new() 
+                        { 
+                            Id = "TodoItem", 
+                            Type = Microsoft.OpenApi.Models.ReferenceType.Schema 
+                        }
+                    }
+                }
+            }
+        }
+    };
+    return operation;
+});
+
+// ========== ПОЛУЧЕНИЕ ЗАДАЧИ ПО ID ==========
+app.MapGet("/todos/{id}", (int id) =>
+{
+    var todo = todosForMinimalApi.FirstOrDefault(t => t.Id == id);
+    if (todo == null)
+        return Results.NotFound(new { message = $"Задача с ID {id} не найдена" });
+    
+    return Results.Ok(todo);
+})
+.WithName("GetTodoById")
+.WithTags("Todos")
+.Produces<TodoItem>(StatusCodes.Status200OK)
+.Produces(StatusCodes.Status404NotFound)
+.WithOpenApi(operation =>
+{
+    operation.Summary = "Получение задачи по ID";
+    operation.Description = "Возвращает задачу с указанным идентификатором";
+    
+    operation.Parameters.Clear();
+    operation.Parameters.Add(new()
+    {
+        Name = "id",
+        In = Microsoft.OpenApi.Models.ParameterLocation.Path,
+        Description = "Идентификатор задачи",
+        Required = true,
+        Schema = new() { Type = "integer", Minimum = 1 }
+    });
+    
+    return operation;
+});
+
+// ========== СОЗДАНИЕ НОВОЙ ЗАДАЧИ ==========
+app.MapPost("/todos", (TodoItem item) =>
+{
+    if (string.IsNullOrWhiteSpace(item.Name))
+        return Results.BadRequest(new { message = "Название задачи обязательно" });
+    
+    item.Id = todosForMinimalApi.Max(t => t.Id) + 1;
+    todosForMinimalApi.Add(item);
+    
+    return Results.Created($"/todos/{item.Id}", item);
+})
+.WithName("CreateTodo")
+.WithTags("Todos")
+.Accepts<TodoItem>("application/json")
+.Produces<TodoItem>(StatusCodes.Status201Created)
+.Produces(StatusCodes.Status400BadRequest)
+.WithOpenApi(operation =>
+{
+    operation.Summary = "Создание новой задачи";
+    operation.Description = "Добавляет новую задачу в систему";
+    
+    operation.RequestBody = new Microsoft.OpenApi.Models.OpenApiRequestBody
+    {
+        Description = "Данные новой задачи",
+        Required = true,
+        Content = new Dictionary<string, Microsoft.OpenApi.Models.OpenApiMediaType>
+        {
+            ["application/json"] = new()
+            {
+                Schema = new()
+                {
+                    Reference = new() 
+                    { 
+                        Id = "TodoItem", 
+                        Type = Microsoft.OpenApi.Models.ReferenceType.Schema 
+                    }
+                },
+                Example = new Microsoft.OpenApi.Any.OpenApiObject
+                {
+                    ["name"] = new Microsoft.OpenApi.Any.OpenApiString("Новая задача"),
+                    ["description"] = new Microsoft.OpenApi.Any.OpenApiString("Описание задачи"),
+                    ["dueDate"] = new Microsoft.OpenApi.Any.OpenApiString("2024-12-31T23:59:59"),
+                    ["status"] = new Microsoft.OpenApi.Any.OpenApiInteger(0)
+                }
+            }
+        }
+    };
+    
+    return operation;
+});
+
+// ========== ОБНОВЛЕНИЕ ЗАДАЧИ ==========
+app.MapPut("/todos/{id}", (int id, TodoItem item) =>
+{
+    if (item == null || item.Id != id)
+        return Results.BadRequest(new { message = "Неверные данные" });
+    
+    var existing = todosForMinimalApi.FirstOrDefault(t => t.Id == id);
+    if (existing == null)
+        return Results.NotFound(new { message = $"Задача с ID {id} не найдена" });
+    
+    existing.Name = item.Name;
+    existing.Description = item.Description;
+    existing.DueDate = item.DueDate;
+    existing.Status = item.Status;
+    
+    return Results.Ok(existing);
+})
+.WithName("UpdateTodo")
+.WithTags("Todos")
+.Accepts<TodoItem>("application/json")
+.Produces<TodoItem>(StatusCodes.Status200OK)
+.Produces(StatusCodes.Status400BadRequest)
+.Produces(StatusCodes.Status404NotFound)
+.WithOpenApi(operation =>
+{
+    operation.Summary = "Обновление существующей задачи";
+    operation.Description = "Обновляет данные задачи с указанным ID";
+    
+    operation.Parameters.Clear();
+    operation.Parameters.Add(new()
+    {
+        Name = "id",
+        In = Microsoft.OpenApi.Models.ParameterLocation.Path,
+        Description = "Идентификатор обновляемой задачи",
+        Required = true,
+        Schema = new() { Type = "integer", Minimum = 1 }
+    });
+    
+    operation.RequestBody = new Microsoft.OpenApi.Models.OpenApiRequestBody
+    {
+        Description = "Новые данные задачи",
+        Required = true,
+        Content = new Dictionary<string, Microsoft.OpenApi.Models.OpenApiMediaType>
+        {
+            ["application/json"] = new()
+            {
+                Schema = new()
+                {
+                    Reference = new() 
+                    { 
+                        Id = "TodoItem", 
+                        Type = Microsoft.OpenApi.Models.ReferenceType.Schema 
+                    }
+                }
+            }
+        }
+    };
+    
+    return operation;
+});
+
+// ========== УДАЛЕНИЕ ЗАДАЧИ ==========
+app.MapDelete("/todos/{id}", (int id) =>
+{
+    var todo = todosForMinimalApi.FirstOrDefault(t => t.Id == id);
+    if (todo == null)
+        return Results.NotFound(new { message = $"Задача с ID {id} не найдена" });
+    
+    todosForMinimalApi.Remove(todo);
+    return Results.NoContent();
+})
+.WithName("DeleteTodo")
+.WithTags("Todos")
+.Produces(StatusCodes.Status204NoContent)
+.Produces(StatusCodes.Status404NotFound)
+.WithOpenApi(operation =>
+{
+    operation.Summary = "Удаление задачи";
+    operation.Description = "Удаляет задачу с указанным ID из системы";
+    
+    operation.Parameters.Clear();
+    operation.Parameters.Add(new()
+    {
+        Name = "id",
+        In = Microsoft.OpenApi.Models.ParameterLocation.Path,
+        Description = "Идентификатор удаляемой задачи",
+        Required = true,
+        Schema = new() { Type = "integer", Minimum = 1 }
+    });
+    
+    return operation;
+});
+
+// ========== ПОИСК ЗАДАЧ ПО СТАТУСУ ==========
+app.MapGet("/todos/by-status/{status}", (Status status) =>
+{
+    var filtered = todosForMinimalApi
+        .Where(t => t.Status == status)
+        .ToList();
+    
+    if (!filtered.Any())
+        return Results.NotFound(new { message = $"Задачи со статусом {status} не найдены" });
+    
+    return Results.Ok(filtered);
+})
+.WithName("GetTodosByStatus")
+.WithTags("Todos")
+.Produces<List<TodoItem>>(StatusCodes.Status200OK)
+.Produces(StatusCodes.Status404NotFound)
+.WithOpenApi(operation =>
+{
+    operation.Summary = "Поиск задач по статусу";
+    operation.Description = "Возвращает задачи с указанным статусом выполнения";
+    
+    operation.Parameters.Clear();
+    operation.Parameters.Add(new()
+    {
+        Name = "status",
+        In = Microsoft.OpenApi.Models.ParameterLocation.Path,
+        Description = "Статус задачи (0 - Pending, 1 - InProgress, 2 - Completed)",
+        Required = true,
+        Schema = new() 
+        { 
+            Type = "integer", 
+            Minimum = 0, 
+            Maximum = 2,
+            Enum = new List<Microsoft.OpenApi.Any.IOpenApiAny>
+            {
+                new Microsoft.OpenApi.Any.OpenApiInteger(0),
+                new Microsoft.OpenApi.Any.OpenApiInteger(1),
+                new Microsoft.OpenApi.Any.OpenApiInteger(2)
+            }
+        }
+    });
+    
+    return operation;
+});
+
+app.Run();
+```
+
+📋 Добавьте схему TodoItem в Swagger (в Program.cs после builder.Services.AddSwaggerGen):
+
+```csharp
+builder.Services.AddSwaggerGen(options =>
+{
+    // ... ваши настройки ...
+    
+    // Добавьте схему TodoItem
+    options.MapType<TodoItem>(() => new Microsoft.OpenApi.Models.OpenApiSchema
+    {
+        Type = "object",
+        Properties = new Dictionary<string, Microsoft.OpenApi.Models.OpenApiSchema>
+        {
+            ["id"] = new() 
+            { 
+                Type = "integer", 
+                Format = "int32",
+                Description = "Уникальный идентификатор задачи",
+                ReadOnly = true
+            },
+            ["name"] = new() 
+            { 
+                Type = "string", 
+                Description = "Название задачи",
+                MinLength = 1
+            },
+            ["description"] = new() 
+            { 
+                Type = "string", 
+                Description = "Описание задачи",
+                Nullable = true
+            },
+            ["dueDate"] = new() 
+            { 
+                Type = "string", 
+                Format = "date-time",
+                Description = "Срок выполнения задачи"
+            },
+            ["status"] = new() 
+            { 
+                Type = "integer",
+                Description = "Статус задачи: 0 - Pending, 1 - InProgress, 2 - Completed",
+                Minimum = 0,
+                Maximum = 2
+            }
+        },
+        Required = new HashSet<string> { "name", "dueDate" }
+    });
+});
+```
+
+🚀 Что делает этот код:
+
+1. .WithName() — задает уникальное имя для endpoint
+2. .WithTags() — группирует endpoints по тегам в Swagger
+3. .Accepts<>() — указывает тип принимаемых данных
+4. .Produces<>() — указывает тип возвращаемых данных и коды ответов
+5. .WithOpenApi() — расширенная кастомизация документации OpenAPI
+
+После добавления этого кода Swagger UI будет показывать полную документацию для всех Minimal API endpoints.
