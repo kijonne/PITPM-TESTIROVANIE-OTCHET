@@ -1,0 +1,353 @@
+Ниже представлено пошаговое выполнение всех заданий из практической работы №10 по оформлению документации для Web API на ASP.NET Core с использованием инструментальных средств.
+
+---
+
+✅ 5.1 Создание проекта API
+
+5.1.1 Создать проект Web-API ASP.NET Core
+
+1. Откройте Visual Studio.
+2. Создайте новый проект → ASP.NET Core Web API.
+3. Назовите проект, например TodoApi.
+4. На шаге настройки:
+   · ✅ Убрать галочку «Настроить для HTTPS»
+   · ✅ Включить «Включить поддержку OpenAPI»
+   · ✅ Использовать «Контроллеры»
+
+---
+
+5.1.2 Добавить контроллер для задач
+
+Создайте модель TodoItem:
+
+```csharp
+namespace TodoApi.Models
+{
+    public enum Status
+    {
+        Pending,
+        InProgress,
+        Completed
+    }
+
+    public class TodoItem
+    {
+        public int Id { get; set; }
+        public string Name { get; set; }
+        public string Description { get; set; }
+        public DateTime DueDate { get; set; }
+        public Status Status { get; set; }
+    }
+}
+```
+
+Создайте контроллер TodoController:
+
+```csharp
+using Microsoft.AspNetCore.Mvc;
+using System.Collections.Generic;
+using System.Linq;
+
+namespace TodoApi.Controllers
+{
+    [ApiController]
+    [Route("api/[controller]")]
+    public class TodoController : ControllerBase
+    {
+        private static List<TodoItem> _todos = new();
+        private static int _nextId = 1;
+
+        [HttpGet]
+        public IActionResult GetAll()
+        {
+            return Ok(_todos);
+        }
+
+        [HttpGet("{id}")]
+        public IActionResult GetById(int id)
+        {
+            var todo = _todos.FirstOrDefault(t => t.Id == id);
+            if (todo == null) return NotFound();
+            return Ok(todo);
+        }
+
+        [HttpPost]
+        public IActionResult Create(TodoItem todo)
+        {
+            if (todo == null) return BadRequest();
+            todo.Id = _nextId++;
+            _todos.Add(todo);
+            return CreatedAtAction(nameof(GetById), new { id = todo.Id }, todo);
+        }
+
+        [HttpDelete("{id}")]
+        public IActionResult Delete(int id)
+        {
+            var todo = _todos.FirstOrDefault(t => t.Id == id);
+            if (todo == null) return NotFound();
+            _todos.Remove(todo);
+            return NoContent();
+        }
+    }
+}
+```
+
+---
+
+5.1.3 Minimal API Endpoint для здоровья
+
+В Program.cs добавьте:
+
+```csharp
+app.MapGet("/health", () => Results.Ok(new { status = "Healthy", timestamp = DateTime.UtcNow }));
+```
+
+---
+
+5.1.4 Minimal API для поиска задач по датам
+
+В Program.cs добавьте:
+
+```csharp
+app.MapGet("/todos/date-range", (DateTime start, DateTime end) =>
+{
+    var filtered = _todos.Where(t => t.DueDate >= start && t.DueDate <= end).ToList();
+    return filtered.Any() ? Results.Ok(filtered) : Results.NotFound();
+})
+.WithName("GetTodosByDateRange");
+```
+
+---
+
+✅ 5.2 Документирование XML
+
+5.2.1 Добавить XML-комментарии
+
+Пример для контроллера:
+
+```csharp
+/// <summary>
+/// Контроллер для управления задачами
+/// </summary>
+[ApiController]
+[Route("api/[controller]")]
+public class TodoController : ControllerBase
+{
+    /// <summary>
+    /// Получить все задачи
+    /// </summary>
+    /// <returns>Список задач</returns>
+    [HttpGet]
+    public IActionResult GetAll() { ... }
+}
+```
+
+5.2.2 Включить XML-документацию
+
+В .csproj добавьте:
+
+```xml
+<PropertyGroup>
+  <GenerateDocumentationFile>true</GenerateDocumentationFile>
+  <NoWarn>$(NoWarn);1591</NoWarn>
+</PropertyGroup>
+```
+
+---
+
+✅ 5.3 Документирование API (Swagger)
+
+5.3.1 Настройка Swagger
+
+В Program.cs:
+
+```csharp
+using Microsoft.OpenApi.Models;
+
+builder.Services.AddSwaggerGen(options =>
+{
+    options.SwaggerDoc("v1", new OpenApiInfo
+    {
+        Title = "Todo API",
+        Version = "v1",
+        Description = "API для управления задачами",
+        Contact = new OpenApiContact
+        {
+            Name = "Иванов Иван",
+            Email = "ivanov@example.com",
+            Url = new Uri("https://example.com")
+        },
+        License = new OpenApiLicense
+        {
+            Name = "MIT",
+            Url = new Uri("https://opensource.org/licenses/MIT")
+        }
+    });
+});
+```
+
+5.3.3 Добавить XML-документацию в Swagger
+
+Добавьте в AddSwaggerGen:
+
+```csharp
+var xmlPath = Path.Combine(AppContext.BaseDirectory, "TodoApi.xml");
+options.IncludeXmlComments(xmlPath);
+```
+
+5.3.4 Проверить отображение
+
+Запустите проект, откройте /swagger и убедитесь, что комментарии отображаются.
+
+---
+
+✅ 5.4 Расширенные XML-комментарии
+
+5.4.1 Добавить <remarks>
+
+Пример для POST:
+
+```csharp
+/// <remarks>
+/// Пример запроса:
+/// 
+/// POST /Todo
+/// {
+///     "id": 0,
+///     "name": "Сделать дело",
+///     "description": "Описание задачи",
+///     "dueDate": "2025-12-31",
+///     "status": 0
+/// }
+/// </remarks>
+```
+
+5.4.2 Добавить <response>
+
+```csharp
+/// <response code="200">Задача создана</response>
+/// <response code="400">Некорректные данные</response>
+```
+
+---
+
+✅ 5.5 Документирование Minimal API
+
+5.5.1 Добавить документацию для Minimal API
+
+Пример:
+
+```csharp
+app.MapGet("/todos/date-range", (DateTime start, DateTime end) => { ... })
+    .WithName("GetTodosByDateRange")
+    .WithTags("Todos")
+    .Produces<List<TodoItem>>(StatusCodes.Status200OK)
+    .Produces(StatusCodes.Status404NotFound)
+    .WithOpenApi(operation =>
+    {
+        operation.Summary = "Поиск задач по датам";
+        operation.Description = "Возвращает задачи, срок выполнения которых входит в указанный диапазон.";
+        operation.Parameters[0].Description = "Начальная дата";
+        operation.Parameters[1].Description = "Конечная дата";
+        return operation;
+    });
+```
+
+---
+
+✅ 5.6 Документирование в Bruno API
+
+1. Экспортируйте Swagger-спецификацию (/swagger/v1/swagger.json).
+2. Импортируйте её в Bruno.
+3. Добавьте описания методов в Markdown.
+4. Сохраните примеры запросов/ответов.
+5. Экспортируйте коллекцию в JSON.
+
+---
+
+✅ 5.7 Генерация документации с DocFx
+
+5.7.1 Установить DocFx
+
+```bash
+dotnet tool update -g docfx
+```
+
+5.7.2 Инициализация
+
+```bash
+docfx init
+```
+
+5.7.3 Редактирование docfx.json
+
+Укажите пути к .csproj и TodoApi.xml.
+
+5.7.4 Сборка документации
+
+```bash
+docfx docfx.json
+```
+
+5.7.5 Запуск сайта
+
+```bash
+docfx serve _site
+```
+
+---
+
+✅ 5.8 Настройка страниц документации
+
+5.8.1 docs/introduction.md
+
+```markdown
+# Введение
+Это API для управления задачами (ToDo).
+```
+
+5.8.2 docs/getting-started.md
+
+```markdown
+# Начало работы
+1. Установите .NET 8+
+2. Склонируйте репозиторий
+3. Запустите `dotnet run`
+```
+
+5.8.3 toc.yml
+
+Добавьте ссылки на созданные MD-файлы.
+
+---
+
+📋 6. Порядок выполнения работы
+
+1. Повторите теорию (п. 3.1).
+2. Выполните задание (п. 5.1–5.8).
+3. Ответьте на контрольные вопросы (п. 8).
+4. Заполните отчёт (п. 7).
+
+---
+
+❓ 8. Контрольные вопросы
+
+8.1 Какие инструментальные средства документирования существуют?
+
+· Swagger/OpenAPI — для документирования REST API.
+· DocFx — для генерации статических сайтов из кода.
+· Bruno — для управления коллекциями API.
+· XML Documentation — встроенное средство C#.
+· Markdown — для написания текстовой документации.
+
+8.2 Какие преимущества предоставляет использование инструментальных средств документирования?
+
+· Автоматизация процесса.
+· Единообразие оформления.
+· Интерактивность (Swagger UI).
+· Поддержка актуальности документации.
+· Упрощение командной работы.
+
+---
+
+Если нужно, могу подготовить готовый архив проекта с выполненными заданиями, отчёт в формате DOCX или шаблон ответов на контрольные вопросы.
